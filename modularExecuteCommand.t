@@ -56,6 +56,10 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	actorSpecified = nil
 	toks = nil
 
+	dict = cmdDict
+	firstPhrase = firstCommandPhrase
+	otherPhrase = commandPhrase
+
 	_exceptionHandlers = nil
 
 	execute() {
@@ -90,6 +94,14 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		toks = nil;
 	}
 
+	// Remember the arguments to executeCommand()
+	setArgs(dst, src, t, fst) {
+		srcActor = src;
+		dstActor = dst;
+		toks = t;
+		first = fst;
+	}
+
 	// Drop-in replacement for adv3's executeCommand().
 	// Should only be called from PendingCommandToks.executePending().
 	execCommand(dst, src, t, fst) {
@@ -99,10 +111,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		clearState();
 
 		// Remember our arguments.
-		srcActor = src;
-		dstActor = dst;
-		toks = t;
-		first = fst;
+		setArgs(dst, src, t, fst);
 
 		libGlobal.enableSenseCache();
 		setSenseContext();
@@ -122,16 +131,14 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			// a keyword action, so we punt things off to
 			// the stock executeCommand().
 			catch(Exception ex) {
-				local v;
-
-				_exceptionHandlers.forEach(function(o) {
-					if((v != nil) || (o.type == nil))
-						return;
-					if(ex.ofKind(o.type)) {
-						v = o.handle(ex);
-					}
-				});
-				switch(v) {
+				// See if we have a handler for this
+				// kind of exception.  The only value we
+				// really care about is mehContinue, which
+				// tells us to go through the parse loop
+				// again.  Anything else, we return.  That
+				// includes the explicit mehReturn value,
+				// or nil (if this was an unhandled exception).
+				switch(exceptionHandler(ex)) {
 					case mehContinue:
 						r = true;
 						break;
@@ -139,49 +146,69 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 						return;
 				}
 			}
-/*
-			catch(ParseFailureException rfExc) {
-				_debug('===ParseFailureException===');
-				rfExc.notifyActor(dstActor, srcActor);
-				clearState();
-				return;
-			}
-			catch(CancelCommandLineException ccExc) {
-				_debug('===CancelCommandLineException===');
-				if(nextCommandTokens != nil)
-					dstActor.getParserMessageObj()
-						.explainCancelCommandLine();
-				clearState();
-				return;
-			}
-			catch(TerminateCommandException tcExc) {
-				_debug('===TerminateCommandException===');
-				clearState();
-				return;
-			}
-			catch(RetryCommandTokensException rctExc) {
-				_debug('===RetryCommandTokensException===');
-				toks = rctExc.newTokens_ + extraTokens;
-				r = true;
-			}
-			catch(ReplacementCommandStringException rcsExc) {
-				local str;
-	
-				_debug('===ReplacementCommandStringException===');
-				str = rcsExc.newCommand_;
-				if(str == nil)
-					return;
-				toks = cmdTokenizer.tokenize(str);
-				first = true;
-				srcActor = rcsExc.issuingActor_;
-				dstActor = rcsExc.targetActor_;
-				dstActor.addPendingCommand(true, srcActor,
-					toks);
-				clearState();
-				return;
-			}
-*/
 		}
+	}
+
+	// Main parse loop.  More or less equivalent to the labelled loop
+	// inside the native executeCommand().
+	parseLoop() {
+		local lst;
+
+		// Clear the extra tokens list.
+		extraTokens = [];
+
+		// Make sure we can obtain a command list. 
+		if((lst = getCommandList()) == nil)
+			return(nil);
+
+		_debug('getCommandList() returned
+			<<toString(lst.length())>> candidates');
+
+		// Pick a match from the list.
+		getMatch(lst);
+		dbgShowGrammarWithCaption('Winner', match);
+
+		// Bookkeeping for multi-command inputs.
+		updateTokens();
+
+		// Get the action from our chosen match.
+		getFirstAction();
+
+		if(match.hasTargetActor())
+			return(handleActorMatch(match));
+
+		if(rankings[1].unknownWordCount != 0) {
+			_debug('===unknownWordCount===');
+			match.resolveNouns(srcActor, dstActor,
+				new OopsResults(srcActor, dstActor));
+		}
+
+		updateSenseContext();
+
+		runCommand();
+
+		cleanup();
+
+		return(nil);
+	}
+
+	// Generic exception handler method.
+	// The argument is the exception, as caught by catch() above.
+	exceptionHandler(ex) {
+		local i, o;
+
+		for(i = 1; i <= _exceptionHandlers.length(); i++) {
+			o = _exceptionHandlers[i];
+
+			// If we have a handler that handles the
+			// type of exception we have, we're done.
+			// Call it, and return its return value.
+			if((o.type != nil) && ex.ofKind(o.type))
+				return(o.handle(ex));
+		}
+
+		// Nope, we didn't have any matching handlers, fail.
+		return(nil);
 	}
 
 	// Set the sense context, if necessary.
@@ -195,14 +222,13 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 	// Returns the list of candidate commands from parseTokens(), if
 	// any.
-	getCommandList(dict?) {
+	callParseTokens() {
 		local lst, prod;
 
 		// Figure out which production to use.
-		prod = (first ? firstCommandPhrase
-			: commandPhrase);
+		prod = (first ? firstPhrase : otherPhrase);
 
-		lst = prod.parseTokens(toks, (dict ? dict : cmdDict));
+		lst = prod.parseTokens(toks, dict);
 
 		_debug('\tparseTokens() returned <<toString(lst.length)>>
 			actions');
@@ -220,30 +246,27 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		return(lst);
 	}
 
-	// Main parse loop.  More or less equivalent to the labelled loop
-	// inside the native executeCommand().
-	parseLoop() {
+	// See if we can obtain a command list from parseTokens().
+	getCommandList() {
 		local lst;
 
-		extraTokens = [];
-
-		// Make sure we can obtain a command list. 
-		lst = getCommandList();
+		lst = callParseTokens();
 		if(lst.length() == 0) {
 			handleEmptyActionList();
 			return(nil);
 		}
 
-		_debug('getCommandList() returned
-			<<toString(lst.length())>> candidates');
+		return(lst);
+	}
 
+	getMatch(lst) {
 		rankings = CommandRanking.sortByRanking(lst,
 			srcActor, dstActor);
 
 		match = rankings[1].match;
+	}
 
-		dbgShowGrammarWithCaption('Winner', match);
-
+	updateTokens() {
 		nextIdx = match.getNextCommandIndex();
 		nextCommandTokens = toks.sublist(nextIdx);
 
@@ -252,29 +275,21 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 		extraIdx = match.tokenList.length() + 1;
 		extraTokens = toks.sublist(extraIdx);
+	}
 
+	getFirstAction() {
 		action = match.resolveFirstAction(srcActor, dstActor);
-/*
-		if(action != nil)
-			action.preVerifyAction();
-*/
+	}
 
-		if(match.hasTargetActor())
-			return(handleActorMatch(match));
-
-		//action = match.resolveFirstAction(srcActor, dstActor);
-		if(rankings[1].unknownWordCount != 0) {
-			_debug('===unknownWordCount===');
-			match.resolveNouns(srcActor, dstActor,
-				new OopsResults(srcActor, dstActor));
-		}
-
+	updateSenseContext() {
 		if((action != nil) && action.isConversational(srcActor)) {
 			senseContext.setSenseContext(srcActor, sight);
 		} else if(actorSpecified && (srcActor != dstActor)) {
 			senseContext.setSenseContext(dstActor, sight);
 		}
+	}
 
+	runCommand() {
 		withCommandTranscript(CommandTranscript, function() {
 			_debug('===executeAction start===');
 			executeAction(dstActor, actorPhrase, srcActor,
@@ -282,7 +297,9 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 				action);
 			_debug('===executeAction end===');
 		});
+	}
 
+	cleanup() {
 		if(nextCommandTokens != nil) {
 			dstActor.addFirstPendingCommand(match.isEndOfSentence(),
 				srcActor, nextCommandTokens);
@@ -290,8 +307,6 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 		if(actorSpecified && (srcActor != dstActor))
 			srcActor.waitForIssuedCommand(dstActor);
-
-		return(nil);
 	}
 
 	handleActorMatch(match) {
