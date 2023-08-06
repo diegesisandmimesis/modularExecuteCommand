@@ -207,11 +207,12 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 		extraTokens = [];
 
-		// Make sure we can obtain a command list.  The return
-		// is really a placebo, because if the list was nil we'd
-		// have already thrown an exception.
-		if((lst = getCommandList()) == nil)
+		// Make sure we can obtain a command list. 
+		lst = getCommandList();
+		if(lst.length() == 0) {
+			handleEmptyActionList();
 			return(nil);
+		}
 
 		_debug('getCommandList() returned
 			<<toString(lst.length())>> candidates');
