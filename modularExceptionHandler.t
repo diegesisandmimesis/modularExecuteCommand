@@ -13,12 +13,14 @@ enum mehReturn, mehContinue;
 class ModularExceptionHandler: ModularExecuteCommandObject
 	modularExecuteCommandID = 'ModularExceptionHandler'
 	execState = modularExecuteCommand
+	type = nil
 
 	clearExecState() { execState.clearExecState(); }
 	handle(ex) { return(mehReturn); }
 ;
 
 mehParseFailure: ModularExceptionHandler
+	type = ParseFailureException
 	handle(rfExc) {
 		_debug('===ParseFailureException===');
 		rfExc.notifyActor(execState.dstActor, execState.srcActor);
@@ -28,6 +30,7 @@ mehParseFailure: ModularExceptionHandler
 ;
 
 mehCancelCommandLine: ModularExceptionHandler
+	type = CancelCommandLineException
 	handle(ccExc) {
 		_debug('===CancelCommandLineException===');
 		if(execState.nextCommandTokens != nil)
@@ -39,6 +42,7 @@ mehCancelCommandLine: ModularExceptionHandler
 ;
 
 mehTerminateCommand: ModularExceptionHandler
+	type = TerminateCommandException
 	handle(tcExc) {
 		_debug('===TerminateCommandException===');
 		clearExecState();
@@ -47,6 +51,7 @@ mehTerminateCommand: ModularExceptionHandler
 ;
 
 mehRetryCommandTokens: ModularExceptionHandler
+	type = RetryCommandTokensException
 	handle(rctExc) {
 		_debug('===RetryCommandTokensException===');
 		execState.toks = rctExc.newTokens_ + execState.extraTokens;
@@ -56,6 +61,7 @@ mehRetryCommandTokens: ModularExceptionHandler
 ;
 
 mehReplacementCommandString: ModularExceptionHandler
+	type = ReplacementCommandStringException
 	handle(rcsExc) {
 		local str;
 

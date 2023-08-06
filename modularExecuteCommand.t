@@ -121,6 +121,25 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			// we get this, it means we're not going to handle
 			// a keyword action, so we punt things off to
 			// the stock executeCommand().
+			catch(Exception ex) {
+				local v;
+
+				_exceptionHandlers.forEach(function(o) {
+					if((v != nil) || (o.type == nil))
+						return;
+					if(ex.ofKind(o.type)) {
+						v = o.handle(ex);
+					}
+				});
+				switch(v) {
+					case mehContinue:
+						r = true;
+						break;
+					default:
+						return;
+				}
+			}
+/*
 			catch(ParseFailureException rfExc) {
 				_debug('===ParseFailureException===');
 				rfExc.notifyActor(dstActor, srcActor);
@@ -161,6 +180,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 				clearState();
 				return;
 			}
+*/
 		}
 	}
 
