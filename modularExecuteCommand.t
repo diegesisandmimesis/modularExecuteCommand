@@ -211,7 +211,10 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		return(nil);
 	}
 
-	// Set the sense context, if necessary.
+	// Set the sense context, if necessary.  This happens at the
+	// start of the parsing loop, before the input tokens are resolved
+	// into an action.  For setting sense context AFTER action resolution,
+	// see updateSenseContext() below.
 	setSenseContext() {
 		if(first && (srcActor != dstActor)
 			&& srcActor.revertTargetActorAtEndOfSentence) {
@@ -219,6 +222,17 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			senseContext.setSenseContext(srcActor, sight);
 		}
 	}
+
+	// Update the sense context.  This happens after action resolution,
+	// immediately before executing the action.
+	updateSenseContext() {
+		if((action != nil) && action.isConversational(srcActor)) {
+			senseContext.setSenseContext(srcActor, sight);
+		} else if(actorSpecified && (srcActor != dstActor)) {
+			senseContext.setSenseContext(dstActor, sight);
+		}
+	}
+
 
 	// Returns the list of candidate commands from parseTokens(), if
 	// any.
@@ -259,6 +273,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		return(lst);
 	}
 
+	// Pick a winner from the list of candidate commands.
 	getMatch(lst) {
 		rankings = CommandRanking.sortByRanking(lst,
 			srcActor, dstActor);
@@ -277,18 +292,12 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		extraTokens = toks.sublist(extraIdx);
 	}
 
+	// Get the action from the highest-ranked command match.
 	getFirstAction() {
 		action = match.resolveFirstAction(srcActor, dstActor);
 	}
 
-	updateSenseContext() {
-		if((action != nil) && action.isConversational(srcActor)) {
-			senseContext.setSenseContext(srcActor, sight);
-		} else if(actorSpecified && (srcActor != dstActor)) {
-			senseContext.setSenseContext(dstActor, sight);
-		}
-	}
-
+	// Here's where we actually attempt to execute the resolved action.
 	runCommand() {
 		withCommandTranscript(CommandTranscript, function() {
 			_debug('===executeAction start===');
@@ -299,12 +308,22 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		});
 	}
 
+	// End-of-parse-loop bookkeeping.
 	cleanup() {
+		cleanupNextCommandTokens();
+		cleanupIssuedCommand();
+	}
+
+	// Bookkeeping for multi-command inputs.
+	cleanupNextCommandTokens() {
 		if(nextCommandTokens != nil) {
 			dstActor.addFirstPendingCommand(match.isEndOfSentence(),
 				srcActor, nextCommandTokens);
 		}
+	}
 
+	// Bookkeeping for commands issued to another actor.
+	cleanupIssuedCommand() {
 		if(actorSpecified && (srcActor != dstActor))
 			srcActor.waitForIssuedCommand(dstActor);
 	}
