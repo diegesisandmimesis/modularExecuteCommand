@@ -42,13 +42,13 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	// All the properties are variables from the native executeCommand(),
 	// which we save as properties just to avoid having messy
 	// calling semantics on all of the methods.
-	action = nil
-	match = nil
+	//action = nil
+	//match = nil
 	extraIdx = nil
 	extraTokens = nil
 	nextCommandTokens = nil
 	nextIdx = nil
-	rankings = nil
+	//rankings = nil
 	first = nil
 	srcActor = nil
 	dstActor = nil
@@ -75,13 +75,13 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 	// Clear out all of our properties.
 	clearState() {
-		action = nil;
-		match = nil;
+		//action = nil;
+		//match = nil;
 		extraIdx = nil;
 		extraTokens = nil;
 		nextCommandTokens = nil;
 		nextIdx = nil;
-		rankings = nil;
+		//rankings = nil;
 
 		first = nil;
 
@@ -132,18 +132,24 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			// the stock executeCommand().
 			catch(Exception ex) {
 				// See if we have a handler for this
-				// kind of exception.  The only value we
-				// really care about is mehContinue, which
-				// tells us to go through the parse loop
-				// again.  Anything else, we return.  That
-				// includes the explicit mehReturn value,
-				// or nil (if this was an unhandled exception).
+				// kind of exception.  
 				switch(exceptionHandler(ex)) {
+					// Go through the parse loop again.
 					case mehContinue:
 						r = true;
 						break;
-					default:
+					// Immediately return.
+					case mehReturn:
 						return;
+					// We got an exception we didn't know
+					// how to handle, re-throw it.
+					// IMPORTANT:  We HAVE to do this,
+					// 	because some commands, like
+					//	>QUIT, function by throwing
+					//	an exception that is caught
+					//	elsewhere.
+					default:
+						throw ex;
 				}
 			}
 		}
@@ -152,7 +158,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	// Main parse loop.  More or less equivalent to the labelled loop
 	// inside the native executeCommand().
 	parseLoop() {
-		local lst;
+		local action, lst, match, rankings;
 
 		// Clear the extra tokens list.
 		extraTokens = [];
@@ -165,14 +171,15 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			<<toString(lst.length())>> candidates');
 
 		// Pick a match from the list.
-		getMatch(lst);
+		rankings = getRankings(lst);
+		match = getMatch(rankings);
 		dbgShowGrammarWithCaption('Winner', match);
 
 		// Bookkeeping for multi-command inputs.
-		updateTokens();
+		updateTokens(match);
 
 		// Get the action from our chosen match.
-		getFirstAction();
+		action = getFirstAction(match);
 
 		if(match.hasTargetActor())
 			return(handleActorMatch(match));
@@ -183,11 +190,11 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 				new OopsResults(srcActor, dstActor));
 		}
 
-		updateSenseContext();
+		updateSenseContext(action);
 
-		runCommand();
+		runCommand(action);
 
-		cleanup();
+		cleanup(match);
 
 		return(nil);
 	}
@@ -225,7 +232,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 	// Update the sense context.  This happens after action resolution,
 	// immediately before executing the action.
-	updateSenseContext() {
+	updateSenseContext(action) {
 		if((action != nil) && action.isConversational(srcActor)) {
 			senseContext.setSenseContext(srcActor, sight);
 		} else if(actorSpecified && (srcActor != dstActor)) {
@@ -247,9 +254,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		_debug('\tparseTokens() returned <<toString(lst.length)>>
 			actions');
 
-		lst = lst.subset({ x: x.resolveFirstAction(srcActor,
-			dstActor) != nil
-		});
+		lst = lst.subset({ x: x.resolveFirstAction(srcActor, dstActor) != nil });
 
 		_debug('\tresolveFirstAction() returned <<toString(lst.length)>>
 			actions');
@@ -273,15 +278,17 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		return(lst);
 	}
 
-	// Pick a winner from the list of candidate commands.
-	getMatch(lst) {
-		rankings = CommandRanking.sortByRanking(lst,
-			srcActor, dstActor);
-
-		match = rankings[1].match;
+	// Sort the candidate commands by ranking.
+	getRankings(lst) {
+		return(CommandRanking.sortByRanking(lst, srcActor, dstActor));
 	}
 
-	updateTokens() {
+	// Pick a winner from the list of candidate commands.
+	getMatch(rankings) {
+		return(rankings[1].match);
+	}
+
+	updateTokens(match) {
 		nextIdx = match.getNextCommandIndex();
 		nextCommandTokens = toks.sublist(nextIdx);
 
@@ -293,12 +300,12 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	}
 
 	// Get the action from the highest-ranked command match.
-	getFirstAction() {
-		action = match.resolveFirstAction(srcActor, dstActor);
+	getFirstAction(match) {
+		return(match.resolveFirstAction(srcActor, dstActor));
 	}
 
 	// Here's where we actually attempt to execute the resolved action.
-	runCommand() {
+	runCommand(action) {
 		withCommandTranscript(CommandTranscript, function() {
 			_debug('===executeAction start===');
 			executeAction(dstActor, actorPhrase, srcActor,
@@ -309,13 +316,13 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	}
 
 	// End-of-parse-loop bookkeeping.
-	cleanup() {
-		cleanupNextCommandTokens();
+	cleanup(match) {
+		cleanupNextCommandTokens(match);
 		cleanupIssuedCommand();
 	}
 
 	// Bookkeeping for multi-command inputs.
-	cleanupNextCommandTokens() {
+	cleanupNextCommandTokens(match) {
 		if(nextCommandTokens != nil) {
 			dstActor.addFirstPendingCommand(match.isEndOfSentence(),
 				srcActor, nextCommandTokens);

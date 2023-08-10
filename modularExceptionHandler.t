@@ -2,6 +2,14 @@
 //
 // modularExceptionHandler.t
 //
+//	Exception handlers declarations.
+//
+//	Instead of hardcoding exception handlers in a static try/catch
+//	block, we define a ModularExceptionHandler class.  At preinit,
+//	the module iterates through each declared instance of this
+//	class and adds it to the list of exception handlers it'll
+//	use when an exception is thrown in the main parse loop.
+//
 #include <adv3.h>
 #include <en_us.h>
 
@@ -12,10 +20,16 @@ enum mehReturn, mehContinue;
 
 class ModularExceptionHandler: ModularExecuteCommandObject
 	modularExecuteCommandID = 'ModularExceptionHandler'
-	execState = modularExecuteCommand
+
+	// The type of exception this handler is for.  Should probably
+	// always be the name of an Exception class.
 	type = nil
 
+	execState = modularExecuteCommand
 	clearExecState() { execState.clearExecState(); }
+
+	// The handler method.  Should be overwritten by each handler
+	// to do whatever the handler is supposed to do.
 	handle(ex) { return(mehReturn); }
 ;
 
