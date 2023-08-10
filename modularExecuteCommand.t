@@ -41,31 +41,52 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 	// All the properties are variables from the native executeCommand(),
 	// which we save as properties just to avoid having messy
-	// calling semantics on all of the methods.
-	//action = nil
-	//match = nil
+	// calling semantics on all of the methods.  We set most of them
+	// when we're called and clean up when we're done (to avoid dangling
+	// reference problems) but otherwise we don't worry too much about
+	// for example trying to pretend we're writing thread-safe code.
+	//
+	// The first four properties are the arguments to executeCommand()
+	srcActor = nil
+	dstActor = nil
+	toks = nil
+	first = nil
+	//
+	// The remainder of these props are bookkeeping for multi-command
+	// inputs.
 	extraIdx = nil
 	extraTokens = nil
 	nextCommandTokens = nil
 	nextIdx = nil
-	//rankings = nil
-	first = nil
-	srcActor = nil
-	dstActor = nil
+	//
+	// Used when a command is addressed at an actor other than the one
+	// issuing the command.
 	actorPhrase = nil
 	actorSpecified = nil
-	toks = nil
 
+	// General parsing settings.  Used as defaults.
+	// Most things will never have to touch these.
+	//
+	// The command dictionary.
 	dict = cmdDict
+	//
+	// The grammatical production for the first command in an input.
 	firstPhrase = firstCommandPhrase
+	//
+	// The grammatical production for subsequent commands in an input.
 	otherPhrase = commandPhrase
 
+	// Set automagically at preinit.
 	_exceptionHandlers = nil
 
+	// Do preinit setup.
 	execute() {
+		// Create our list of exception handlers.
 		_initExceptionHandlers();
 	}
 
+	// Go through all instances of ModularExceptionHandler and remember
+	// them.
 	_initExceptionHandlers() {
 		_exceptionHandlers = new Vector();
 		forEachInstance(ModularExceptionHandler, function(o) {
@@ -75,23 +96,18 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 	// Clear out all of our properties.
 	clearState() {
-		//action = nil;
-		//match = nil;
+		srcActor = nil;
+		dstActor = nil;
+		toks = nil;
+		first = nil;
+
 		extraIdx = nil;
 		extraTokens = nil;
 		nextCommandTokens = nil;
 		nextIdx = nil;
-		//rankings = nil;
-
-		first = nil;
 
 		actorPhrase = nil;
 		actorSpecified = nil;
-
-		srcActor = nil;
-		dstActor = nil;
-
-		toks = nil;
 	}
 
 	// Remember the arguments to executeCommand()
