@@ -2,6 +2,25 @@
 //
 // modularExecuteCommand.t
 //
+//	This is a replacement for adv3's default executeCommand() function,
+//	re-organized to make updates/modification simpler (hopefully).
+//
+//	The code from executeCommand() is found in lib/adv3/exec.t in the
+//	TADS3 source.  The original code carries the following copyright
+//	message:
+//
+//	/* 
+//	 *   Copyright (c) 2000, 2006 Michael J. Roberts.  All Rights Reserved. 
+//	 *   
+//	 *   TADS 3 Library: command execution
+//	 *   
+//	 *   This module defines functions that perform command execution.  
+//	 */
+//
+//	The modularExecuteCommand module is distributed under the MIT license,
+//	a copy of which can be found in LICENSE.txt in the top level of the
+//	module source.
+//
 #include <adv3.h>
 #include <en_us.h>
 
@@ -13,6 +32,7 @@ modularExecuteCommandModuleID: ModuleID {
         listingOrder = 99
 }
 
+// Generic object class for stuff in the module.
 class ModularExecuteCommandObject: object
 	modularExecuteCommandID = nil
 	_debug(msg?) {}
@@ -22,11 +42,7 @@ class ModularExecuteCommandObject: object
 
 // The only place that calls executeCommand() is
 // PendingCommandToks.executePending(), so instead of replacing executeCommand()
-// outright, we implement our own and just call our bespoke version first.
-// This is done in the belief that what we're here for (handling bare noun
-// phrases on the command line) is more straightforward than general command
-// parsing, so we prefer using the stock version instead of our own when
-// possible (because we might have missed some weird corner cases).
+// outright, we implement our own and just call our bespoke version instead.
 modify PendingCommandToks
 	executePending(targetActor) {
 		modularExecuteCommand.execCommand(targetActor, issuer_,
@@ -34,7 +50,11 @@ modify PendingCommandToks
 	}
 ;
 
-// Our executeCommand() replacement is a singleton with a bunch of methods.
+// Our executeCommand() replacement is a big singleton.
+// The goal is for the stuff handled in the parse loop to be broken
+// out into individual methods, so updating/modifying the process will
+// involve "modify modularExecuteCommand" to update specific bits, instead
+// of having to replace the whole thing.
 modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	// Debugging identifier
 	modularExecuteCommandID = 'modularExecuteCommand'

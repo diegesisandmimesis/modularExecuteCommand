@@ -10,6 +10,9 @@
 //	class and adds it to the list of exception handlers it'll
 //	use when an exception is thrown in the main parse loop.
 //
+//	The handlers declared below replicate the behavior, mostly of
+//	the stock executeCommand() from adv3.
+//
 #include <adv3.h>
 #include <en_us.h>
 
@@ -69,7 +72,6 @@ mehRetryCommandTokens: ModularExceptionHandler
 	handle(rctExc) {
 		_debug('===RetryCommandTokensException===');
 		execState.toks = rctExc.newTokens_ + execState.extraTokens;
-		//r = true;
 		return(mehContinue);
 	}
 ;
@@ -90,7 +92,6 @@ mehReplacementCommandString: ModularExceptionHandler
 		execState.dstActor.addPendingCommand(true, execState.srcActor,
 			execState.toks);
 		clearExecState();
-		//return;
 		return(mehReturn);
 	}
 ;
