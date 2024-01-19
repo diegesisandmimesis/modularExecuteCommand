@@ -141,8 +141,6 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 	// Drop-in replacement for adv3's executeCommand().
 	// Should only be called from PendingCommandToks.executePending().
 	execCommand(dst, src, t, fst) {
-		local r;
-
 		// Start from scratch every time we're called.
 		clearState();
 
@@ -152,12 +150,19 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		libGlobal.enableSenseCache();
 		setSenseContext();
 
+		return(whileLoop());
+	}
+
+	whileLoop() {
+		local r, v;
+
 		// More or less equivalent to the parseTokenLoop: loop
 		// from executeCommand().  We loop through the tokens
 		// until we're done or something throws an exception.
 		r = true;
 		while(r) {
 			try {
+				v = true;
 				r = parseLoop();
 			}
 			// One of the reasons we bothered to re-implement
@@ -167,6 +172,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			// a keyword action, so we punt things off to
 			// the stock executeCommand().
 			catch(Exception ex) {
+				v = nil;
 				// See if we have a handler for this
 				// kind of exception.  
 				switch(exceptionHandler(ex)) {
@@ -176,7 +182,7 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 						break;
 					// Immediately return.
 					case mehReturn:
-						return;
+						return(v);
 					// We got an exception we didn't know
 					// how to handle, re-throw it.
 					// IMPORTANT:  We HAVE to do this,
@@ -189,6 +195,10 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 				}
 			}
 		}
+
+		if(gTranscript.isFailure == true) v = nil;
+
+		return(v);
 	}
 
 	// Main parse loop.  More or less equivalent to the labelled loop
@@ -221,9 +231,9 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 			return(handleActorMatch(match));
 
 		if(rankings[1].unknownWordCount != 0) {
-			_debug('===unknownWordCount===');
-			match.resolveNouns(srcActor, dstActor,
-				new OopsResults(srcActor, dstActor));
+			unknownWordCount(match, srcActor, dstActor);
+			//_debug('===unknownWordCount===');
+			//match.resolveNouns(srcActor, dstActor, new OopsResults(srcActor, dstActor));
 		}
 
 		updateSenseContext(action);
@@ -233,6 +243,11 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 		cleanup(match);
 
 		return(nil);
+	}
+
+	unknownWordCount(m, a0, a1) {
+		_debug('===unknownWordCount===');
+		m.resolveNouns(a0, a1, new OopsResults(a0, a1));
 	}
 
 	// Generic exception handler method.
