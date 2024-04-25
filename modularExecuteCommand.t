@@ -232,8 +232,6 @@ modularExecuteCommand: ModularExecuteCommandObject, PreinitObject
 
 		if(rankings[1].unknownWordCount != 0) {
 			unknownWordCount(match, srcActor, dstActor);
-			//_debug('===unknownWordCount===');
-			//match.resolveNouns(srcActor, dstActor, new OopsResults(srcActor, dstActor));
 		}
 
 		updateSenseContext(action);

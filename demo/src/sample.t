@@ -23,9 +23,28 @@
 
 #include "modularExecuteCommand.h"
 
-startRoom: Room 'Void' "This is a featureless void. ";
+startRoom: Room 'Void'
+	"This is a featureless void. "
+	north = northRoom
+;
 +me: Person;
 +pebble: Thing 'small round pebble' 'pebble' "A small, round pebble. ";
++alice: Person 'alice' 'Alice'
+	"She looks like the first person you'd turn to in a problem. "
+	isHer = true
+	isProperName = true
+	obeyCommand(fromActor, action) {
+		if(action.ofKind(TakeAction) || action.ofKind(DropAction))
+			return(true);
+		return(inherited(fromActor, action));
+	}
+;
+
+northRoom: Room 'North Room'
+	"This is the north room. "
+	south = startRoom
+;
+
 
 versionInfo: GameID;
 gameMain: GameMainDef initialPlayerChar = me;
